@@ -13,6 +13,24 @@ def load_monster(monster_name,db='../csv/monster_compendium.csv'):
 	pass 
 
 
+def make_base_monster(monster_name):
+	monster = StatBlock(name=monster_name)
+	monster.update_stat('HP',33.)
+	monster.update_stat('AC',15.)
+	monster.update_stat('STR',13.)
+	monster.update_stat('DEX',13.)
+	monster.update_stat('CON',13.)
+	monster.update_stat('WIS',13.)
+	monster.update_stat('INT',13.)
+	monster.update_stat('CHA',13.)
+	monster.update_stat('avg_attack_1',10.)
+	monster.update_stat('avg_attack_2',10.)
+	monster.update_stat('max_attack_1',10.)
+	monster.update_stat('max_attack_2',10.)
+	monster.update_stat('Size',1.)
+	monster.update_stat('spellcasting',1.)
+	return monster 
+
 def view_user_monsters(db='../csv/user_monsters.csv'):
 	'''
 	Load up the csv (to df) containing user-defined monsters stored on-file and view it 
@@ -28,16 +46,16 @@ class StatBlock(object):
 	def __init__(self,name,creature_type='monster'):
 		#Store relevant properties as attributes of class
 		#Load final dataframe of parameters which will then be initialized for each statblock  
-		stat_names = pd.read_csv('../csv/monster_stats_with_attack_rolls.csv',header=0,nrows=1).columns
-		self.stat_df = pd.DataFrame()
+		stat_names = pd.read_csv('../csv/monster_compendium.csv',header=0,nrows=1).columns
+		self.stats = pd.DataFrame()
 		for i in stat_names:
 			setattr(self,i,0.0)
-			self.stat_df[i] = np.array([0.0])
+			self.stats[i] = np.array([0.0])
 		
 		self.name = name
-		self.stat_df['name'] = np.array([self.name]) 
+		self.stats['Name'] = np.array([self.name]) 
 		self.creature_type = creature_type 
-		self.stat_df['creature_type'] = np.array([creature_type])
+		self.stats['creature_type'] = np.array([creature_type])
 		#Also store the relevant properties as a single-valued dataframe which can be acted on by our models 
 		# (and for convenient single variable information transfer)
 		
@@ -47,7 +65,7 @@ class StatBlock(object):
 		'''
 		Convenience function to globally update the quantity of a stat at all places in the StatBlock.
 		'''
-		self.stat_df[stat] = update_value 
+		self.stats[stat] = update_value 
 		setattr(self,stat,update_value)
 		 
 
@@ -57,7 +75,7 @@ class StatBlock(object):
 		given the input parameters, and produce a PDF capturing the spread in CR as predicted by the model
 		'''
 		model = Model()
-		fit = model.predict(self.stat_df)
+		fit = model.predict(self.stats)
 
 	def save_stats(self,db='user_monsters.csv'):
 		'''
@@ -75,24 +93,56 @@ class Model(object):
 	Object responsible for executing the regression and/or loading regression weights and 
 	which contains methods for calculating stats given other stats. (namely CR given everything else)
 	'''
-	def __init__(self,design_csv):
-		self.design_df = pd.read_csv(design_csv,header=0)
+	def __init__(self,design_csv='../csv/monster_compendium.csv'):
+		self.design_df_raw = pd.read_csv(design_csv,header=0)
+		self.calc_normalizations()
+		self.design_df = self.statblock_to_structure(self.design_df_raw)
+	
 
-	def fit(self):
-		
+	def calc_normalizations(self,drop_cols =['Name','CR','CHA','Unnamed: 0']):
+		df_vectors = self.design_df_raw.copy().drop(drop_cols,axis=1)
+		avg = df_vectors.mean(axis=0)
+		self.norm_constants = avg
+
+
+	def statblock_to_structure(self,df_crc1,drop_cols=['Name','CR','CHA','Unnamed: 0']):
+		'''
+		Turn full statblock into structure matrix precursor.
+		Takes in statblock dataframe
+		This function drops name and CR, renormalizes columns, and generates column combinations. 
+		Returns structure matrix dataframe
+		'''
+		df_crc1 = df_crc1.drop(drop_cols,axis=1)
+		df_crc1 = df_crc1 / self.norm_constants
+		df_crc = df_crc1.copy()
+		for ci in df_crc1.columns:
+			for cj in df_crc1.columns:
+				if not str(ci+'*'+cj) in df_crc.columns:
+					df_crc[str(ci+'*'+cj)]=df_crc1[ci]*df_crc1[cj]
+
+		return df_crc
+
+	def fit(self,log_lam=8.5):
+
 		#Specify the DESIGN MATRIX of regress
 		
-		y = design_df['CR']
-		A_prec = self.statblock_to_structure(self.design_df)
-		A = np.hstack( (np.array(design_df[i]).reshape(-1,1) for i in design_df.columns ) ) 
-		C = A.T.dot(A)
-		w = np.linalg.solve(C, A.T.dot(y))
-		pred_cr = np.dot(A,w)
-		ndof = A.shape[1]
-		chi_squared = (y-pred_cr)**2 / ndof
-		self.model_weights = w 
+		self.y = np.array(self.design_df_raw['CR'])
+		self.A = np.hstack( (np.array(self.design_df[i]).reshape(-1,1) for i in self.design_df.columns ) ) 
+		self.A = np.nan_to_num(self.A)
+		self.C = self.A.T.dot(self.A)
+		self.C[np.diag_indices_from(self.C)] += 1.0 / 10 ** log_lam
+		self.w = np.linalg.solve(self.C, self.A.T.dot(self.y))
+		self.pred_cr = np.dot(self.A,self.w)
+		ndof = self.A.shape[1]
+		chi_squared = (self.y-self.pred_cr)**2 / ndof
+		print('Chi-squared of fit: {}'.format(np.sum(chi_squared)))
+		self.model_weights = self.w 
 		fig, ax = plt.subplots()
-		ax.plot(pred_cr,y,color='C0','.',alpha=0.4)
+		ax.plot(self.pred_cr,self.y,'.',color='C0',alpha=0.9)
+		ax.set_xlabel('CR values from the literature')
+		ax.set_ylabel('CR values from monsterCR predictions')
+		ax.plot([0,40],[0,40],'k',alpha=0.5,label='1:1 relation')
+		ax.legend()
 		plt.show()
 
 		
@@ -101,13 +151,16 @@ class Model(object):
 		Given a single row-vector stat_df dataframe of a monster, use 
 		the calculated model weights to generate a predicted CR 
 		'''
+		stat_df = self.statblock_to_structure(stat_df,drop_cols=['Name','CR','CHA','creature_type','Unnamed: 0'])
+		print(stat_df)
 		A = np.hstack( (np.array(stat_df[i]).reshape(-1,1) for i in stat_df.columns )  ) 
+		print(A)
 		if not hasattr(self,'model_weights'):
 			self.fit()
 		fit_cr = np.dot(A,self.model_weights)
-		print('Predicted CR: {}'.format(pred_cr))
+		print('Predicted CR: {}'.format(fit_cr))
 		self.fit_CR = fit_cr
-		
+
 
 
 
