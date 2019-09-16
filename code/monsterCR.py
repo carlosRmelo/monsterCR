@@ -86,6 +86,25 @@ class StatBlock(object):
 		'''
 
 		pass 
+	
+	def update_HP(self,value):
+		self.update_stat('HP',value)
+	def update_AC(self,value):
+		self.update_stat('AC',value)
+	def update_CR(self,value):
+		self.update_stat('CR',value)
+	def update_STR(self,value):
+		self.update_stat('STR',value)
+	def update_DEX(self,value):
+		self.update_stat('DEX',value)
+	def update_CON(self,value):
+		self.update_stat('CON',value)
+	def update_WIS(self,value):
+		self.update_stat('WIS',value)
+	def update_INT(self,value):
+		self.update_stat('INT',value)
+	def update_HP(self,value):
+		self.update_stat('HP',value)
 
 
 class Model(object):
@@ -105,45 +124,47 @@ class Model(object):
 		self.norm_constants = avg
 
 
-	def statblock_to_structure(self,df_crc1,drop_cols=['Name','CR','CHA','Unnamed: 0']):
+	def statblock_to_structure(self,rich_design_df,drop_cols=['Name','CR','CHA','Unnamed: 0']):
 		'''
 		Turn full statblock into structure matrix precursor.
 		Takes in statblock dataframe
 		This function drops name and CR, renormalizes columns, and generates column combinations. 
 		Returns structure matrix dataframe
 		'''
-		df_crc1 = df_crc1.drop(drop_cols,axis=1)
-		df_crc1 = df_crc1 / self.norm_constants
-		df_crc = df_crc1.copy()
-		for ci in df_crc1.columns:
-			for cj in df_crc1.columns:
-				if not str(ci+'*'+cj) in df_crc.columns:
-					df_crc[str(ci+'*'+cj)]=df_crc1[ci]*df_crc1[cj]
+		design_df = rich_design_df.drop(drop_cols,axis=1)
+		design_df = design_df / self.norm_constants
+		design_df_copy = design_df.copy()
+		for ci in design_df_copy.columns:
+			for cj in design_df_copy.columns:
+				if not str(ci+'*'+cj) in design_df.columns:
+					design_df[str(ci+'*'+cj)]=design_df_copy[ci]*design_df_copy[cj]
 
-		return df_crc
+		return design_df 
 
-	def fit(self,log_lam=8.5):
+	def fit(self,log_lam=8.5,plot_fit=False):
 
 		#Specify the DESIGN MATRIX of regress
 		
-		self.y = np.array(self.design_df_raw['CR'])
+		self.y = np.array(self.design_df_raw['CR']) / self.design_df_raw['CR'].mean()
+		print('Mean CR: {}'.format(self.design_df_raw['CR'].mean()))
 		self.A = np.hstack( (np.array(self.design_df[i]).reshape(-1,1) for i in self.design_df.columns ) ) 
 		self.A = np.nan_to_num(self.A)
 		self.C = self.A.T.dot(self.A)
 		self.C[np.diag_indices_from(self.C)] += 1.0 / 10 ** log_lam
 		self.w = np.linalg.solve(self.C, self.A.T.dot(self.y))
-		self.pred_cr = np.dot(self.A,self.w)
+		self.pred_cr = np.dot(self.A,self.w) 
 		ndof = self.A.shape[1]
 		chi_squared = (self.y-self.pred_cr)**2 / ndof
 		print('Chi-squared of fit: {}'.format(np.sum(chi_squared)))
 		self.model_weights = self.w 
-		fig, ax = plt.subplots()
-		ax.plot(self.pred_cr,self.y,'.',color='C0',alpha=0.9)
-		ax.set_xlabel('CR values from the literature')
-		ax.set_ylabel('CR values from monsterCR predictions')
-		ax.plot([0,40],[0,40],'k',alpha=0.5,label='1:1 relation')
-		ax.legend()
-		plt.show()
+		if plot_fit:
+			fig, ax = plt.subplots()
+			ax.plot(self.pred_cr*self.design_df_raw['CR'].mean(),self.y*self.design_df_raw['CR'].mean(),'.',color='C0',alpha=0.9)
+			ax.set_ylabel('CR values from the literature')
+			ax.set_xlabel('CR values from monsterCR predictions')
+			ax.plot([0,40],[0,40],'k',alpha=0.5,label='1:1 relation')
+			ax.legend()
+			plt.show()
 
 		
 	def predict(self,stat_df):
@@ -158,7 +179,7 @@ class Model(object):
 		if not hasattr(self,'model_weights'):
 			self.fit()
 		fit_cr = np.dot(A,self.model_weights)
-		print('Predicted CR: {}'.format(fit_cr))
+		print('Predicted CR: {}'.format(fit_cr*3.88612903226))
 		self.fit_CR = fit_cr
 
 
