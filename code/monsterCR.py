@@ -13,7 +13,7 @@ def load_monster(monster_name,db='../csv/monster_compendium.csv'):
 	pass 
 
 
-def make_base_monster(monster_name):
+def create_base_monster(monster_name):
 	monster = StatBlock(name=monster_name)
 	monster.update_stat('HP',33.)
 	monster.update_stat('AC',15.)
@@ -43,7 +43,7 @@ class StatBlock(object):
 	The primary user object in monsterCR -- the StatBlock contains all relevant statistics on a creature
 	along with methods for calculating (or recalculating) desired statistics
 	'''
-	def __init__(self,name,creature_type='monster'):
+	def __init__(self,name):
 		#Store relevant properties as attributes of class
 		#Load final dataframe of parameters which will then be initialized for each statblock  
 		stat_names = pd.read_csv('../csv/monster_compendium.csv',header=0,nrows=1).columns
@@ -54,8 +54,7 @@ class StatBlock(object):
 		
 		self.name = name
 		self.stats['Name'] = np.array([self.name]) 
-		self.creature_type = creature_type 
-		self.stats['creature_type'] = np.array([creature_type])
+	
 		#Also store the relevant properties as a single-valued dataframe which can be acted on by our models 
 		# (and for convenient single variable information transfer)
 		
@@ -114,17 +113,16 @@ class Model(object):
 	'''
 	def __init__(self,design_csv='../csv/monster_compendium.csv'):
 		self.design_df_raw = pd.read_csv(design_csv,header=0)
-		self.calc_normalizations()
-		self.design_df = self.statblock_to_structure(self.design_df_raw)
+		
 	
 
-	def calc_normalizations(self,drop_cols =['Name','CR','CHA','Unnamed: 0']):
+	def calc_normalizations(self,drop_cols):
 		df_vectors = self.design_df_raw.copy().drop(drop_cols,axis=1)
 		avg = df_vectors.mean(axis=0)
-		self.norm_constants = avg
+		return avg
 
 
-	def statblock_to_structure(self,rich_design_df,drop_cols=['Name','CR','CHA','Unnamed: 0']):
+	def statblock_to_structure(self,rich_design_df,drop_cols):
 		'''
 		Turn full statblock into structure matrix precursor.
 		Takes in statblock dataframe
@@ -132,7 +130,8 @@ class Model(object):
 		Returns structure matrix dataframe
 		'''
 		design_df = rich_design_df.drop(drop_cols,axis=1)
-		design_df = design_df / self.norm_constants
+		norm_constants = self.calc_normalizations(drop_cols)
+		design_df = design_df / norm_constants
 		design_df_copy = design_df.copy()
 		for ci in design_df_copy.columns:
 			for cj in design_df_copy.columns:
@@ -141,46 +140,47 @@ class Model(object):
 
 		return design_df 
 
-	def fit(self,log_lam=8.5,plot_fit=False):
+	def fit(self,stat_fit='CR',log_lam=8.5,plot_fit=False):
 
 		#Specify the DESIGN MATRIX of regress
-		
-		self.y = np.array(self.design_df_raw['CR']) / self.design_df_raw['CR'].mean()
-		print('Mean CR: {}'.format(self.design_df_raw['CR'].mean()))
+		drop_cols = ['Name','CHA','Unnamed: 0'] + [stat_fit]
+
+		self.design_df = self.statblock_to_structure(self.design_df_raw,drop_cols)
+
+		self.y = np.array(self.design_df_raw[stat_fit]) / self.design_df_raw[stat_fit].mean()
 		self.A = np.hstack( (np.array(self.design_df[i]).reshape(-1,1) for i in self.design_df.columns ) ) 
 		self.A = np.nan_to_num(self.A)
 		self.C = self.A.T.dot(self.A)
 		self.C[np.diag_indices_from(self.C)] += 1.0 / 10 ** log_lam
 		self.w = np.linalg.solve(self.C, self.A.T.dot(self.y))
-		self.pred_cr = np.dot(self.A,self.w) 
+		self.pred_stat = np.dot(self.A,self.w) 
 		ndof = self.A.shape[1]
-		chi_squared = (self.y-self.pred_cr)**2 / ndof
+		chi_squared = (self.y-self.pred_stat)**2 / ndof
 		print('Chi-squared of fit: {}'.format(np.sum(chi_squared)))
 		self.model_weights = self.w 
 		if plot_fit:
 			fig, ax = plt.subplots()
-			ax.plot(self.pred_cr*self.design_df_raw['CR'].mean(),self.y*self.design_df_raw['CR'].mean(),'.',color='C0',alpha=0.9)
-			ax.set_ylabel('CR values from the literature')
-			ax.set_xlabel('CR values from monsterCR predictions')
+			ax.plot(self.pred_stat*self.design_df_raw[stat_fit].mean(),self.y*self.design_df_raw[stat_fit].mean(),'.',color='C0',alpha=0.9)
+			ax.set_ylabel('{} values from the literature'.format(stat_fit))
+			ax.set_xlabel('{} values from monsterCR predictions'.format(stat_fit))
 			ax.plot([0,40],[0,40],'k',alpha=0.5,label='1:1 relation')
 			ax.legend()
 			plt.show()
 
 		
-	def predict(self,stat_df):
+	def predict(self,stat_df,stat):
 		'''
 		Given a single row-vector stat_df dataframe of a monster, use 
 		the calculated model weights to generate a predicted CR 
 		'''
-		stat_df = self.statblock_to_structure(stat_df,drop_cols=['Name','CR','CHA','creature_type','Unnamed: 0'])
-		print(stat_df)
+		drop_cols=['Name','CHA','Unnamed: 0'] + [stat]
+		stat_df = self.statblock_to_structure(stat_df,drop_cols)
 		A = np.hstack( (np.array(stat_df[i]).reshape(-1,1) for i in stat_df.columns )  ) 
-		print(A)
 		if not hasattr(self,'model_weights'):
 			self.fit()
-		fit_cr = np.dot(A,self.model_weights)
-		print('Predicted CR: {}'.format(fit_cr*3.88612903226))
-		self.fit_CR = fit_cr
+		fit_stat = np.dot(A,self.model_weights)*self.design_df_raw[stat].mean()
+		print('Predicted {}: {}'.format(stat,fit_stat))
+		
 
 
 
