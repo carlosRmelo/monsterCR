@@ -143,7 +143,7 @@ class Model(object):
 	def fit(self,stat_fit='CR',log_lam=8.5,plot_fit=False):
 
 		#Specify the DESIGN MATRIX of regress
-		drop_cols = ['Name','CHA','Unnamed: 0'] + [stat_fit]
+		drop_cols = ['Name'] + [stat_fit]
 
 		self.design_df = self.statblock_to_structure(self.design_df_raw,drop_cols)
 
@@ -173,7 +173,7 @@ class Model(object):
 		Given a single row-vector stat_df dataframe of a monster, use 
 		the calculated model weights to generate a predicted CR 
 		'''
-		drop_cols=['Name','CHA','Unnamed: 0'] + [stat]
+		drop_cols=['Name'] + [stat]
 		stat_df = self.statblock_to_structure(stat_df,drop_cols)
 		A = np.hstack( (np.array(stat_df[i]).reshape(-1,1) for i in stat_df.columns )  ) 
 		if not hasattr(self,'model_weights'):
