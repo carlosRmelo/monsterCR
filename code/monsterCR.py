@@ -3,14 +3,58 @@ import matplotlib.pyplot as plt
 import pandas as pd 
 
 
+def search_monsters(monster_name,db='../csv/monster_compendium.csv'):
+	'''
+	Search the database of monsters (used in the regression) and return a list of monsters
+	for which the entered search terms exists in a given name in the compendium. 
 
-def load_monster(monster_name,db='../csv/monster_compendium.csv'):
+	ARGS: 
+		monster_name (str): Monster name (or subname) to search. For example, searching 'Orc' will 
+		bring up all monsters with 'Orc' somewhere in the name. Case sensitive for now.
 	'''
-	Search the database of monsters (used in the regression) and return a StatBlock object 
-	of the monster, if it exists in the database (exact name needed?)
+	# Search for all instances of that string within names 
+	df = pd.read_csv(db,header=0)
+	names = list(df.Name.values)
+	subsearch = [i for i in names if monster_name in i]
+	print('Search found substring matches with the following:')
+	print('----------------------------------------------')
+	for i in subsearch:
+		print(i)
+	print('----------------------------------------------')
+
+def load_monster(monster_name,fullsearch=False,db='../csv/monster_compendium.csv'):
 	'''
+	Given a monster name that is in the compendium, create a StatBlock object with that monster's stats. 
+	Has an optional fullsearch flag which reproduces the usage of 'search_monsters()'. 
+
+	ARGS: 
+		monster_name (str): Name of monster to load (case sensitive for now)
+		fullsearch (optional): True or False (default False). If True, searches instead.
+	'''
+	df = pd.read_csv(db,header=0)
 	
-	pass 
+	if fullsearch==False:
+		#Search for exact string
+		search_result = df[df['Name']==monster_name] 
+		if search_result.empty:
+			print('Monster not found! Try Search...')
+			return None
+		result_statblock = StatBlock(name=monster_name) 
+		result_statblock.update_from_monster(search_result)
+		return result_statblock
+
+	elif fullsearch==True: 
+		# Search for all instances of that string within names 
+		names = list(df.Name.values)
+		subsearch = [i for i in names if monster_name in i]
+		print('Search found substring matches with the following:')
+		print('----------------------------------------------')
+		for i in subsearch:
+			print(i)
+		print('----------------------------------------------')
+	
+
+
 
 
 def create_base_monster(monster_name):
@@ -59,6 +103,11 @@ class StatBlock(object):
 		# (and for convenient single variable information transfer)
 		
 
+	def update_from_monster(self,df):
+		stat_names = pd.read_csv('../csv/monster_compendium.csv',header=0,nrows=1).columns
+		for i in stat_names:
+			setattr(self,i,df[i].values[0])
+			self.stats[i] = np.array(df[i])
 
 	def update_stat(self,stat,update_value):
 		'''
