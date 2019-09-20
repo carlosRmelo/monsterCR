@@ -48,6 +48,12 @@ The first is `load_monster()`, which allows you to load up a monster from the da
 ```
 my_zombie_mod = mcr.load_monster(name='Zombie')
 ```
+You can also search the compendium of monsters for substrings/full names to ensure something is there. Running
+```
+mcr.search_monsters('Orc')
+```
+for example, will print every monster containing 'Orc' in the name. You can then load any you like using `load_monster()`.
+
 # Predicting Challenge Rating 
 One main feature of monsterCR is the ability to predict a challenge rating (CR) for your monster given a (roughly) arbitrary set of input stats, relying on a linear regression over a large compendium of several hundred published monsters. There are obvious caveats to such a technique, i.e., special abilities, spells, resistances/immunities, etc., have interwoven affects on CR. Our goal is not to painstakingly parametrize these, but rather simply fit on all of them. You can run a simple fit to the data in the compendium via the built-in method:
 ```
@@ -72,6 +78,8 @@ my_monster.update_AC(20)
 my_monster.calc_CR()
 ```
 You can read more about inputs to the ``model.fit()`` method, including L2 regularization, in the (soon to come) documentation, if you want to get into adding your own features. 
+
+The advantage to instantiating a separate model object is that if you have multiple created creatures, you only have to run the ``model.fit()`` method once, then your model can predict on any of their statblocks (that said, the fit is roughly instantaneous anyway). 
 
 
 

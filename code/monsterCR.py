@@ -22,6 +22,14 @@ def search_monsters(monster_name,db='../csv/monster_compendium.csv'):
 		print(i)
 	print('----------------------------------------------')
 
+
+def search_by_stat(stat,lower,upper):
+	'''
+	Find all monsters in the compendium with stats in a certain boundary. 
+	'''
+	pass
+
+
 def load_monster(monster_name,fullsearch=False,db='../csv/monster_compendium.csv'):
 	'''
 	Given a monster name that is in the compendium, create a StatBlock object with that monster's stats. 
@@ -52,10 +60,6 @@ def load_monster(monster_name,fullsearch=False,db='../csv/monster_compendium.csv
 		for i in subsearch:
 			print(i)
 		print('----------------------------------------------')
-	
-
-
-
 
 def create_base_monster(monster_name):
 	monster = StatBlock(name=monster_name)
