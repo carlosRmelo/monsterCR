@@ -94,7 +94,7 @@ class StatBlock(object):
 	def __init__(self,name):
 		#Store relevant properties as attributes of class
 		#Load final dataframe of parameters which will then be initialized for each statblock  
-		stat_names = pd.read_csv('../csv/monster_compendium.csv',header=0,nrows=1).columns
+		stat_names = pd.read_csv('../csv/New_great_compendium_v1.csv',header=0,nrows=1).columns
 		self.stats = pd.DataFrame()
 		for i in stat_names:
 			setattr(self,i,0.0)
@@ -166,7 +166,7 @@ class Model(object):
 	'''
 	def __init__(self,design_csv='../csv/monster_compendium.csv'):
 		self.design_df_raw = pd.read_csv(design_csv,header=0)
-		
+
 	
 
 	def calc_normalizations(self,drop_cols):
