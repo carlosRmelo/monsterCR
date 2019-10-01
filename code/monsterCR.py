@@ -1,9 +1,11 @@
 import numpy as np 
 import matplotlib.pyplot as plt 
 import pandas as pd 
+import functools
 
+db_use = '../csv/monster_compendium.csv'
 
-def search_monsters(monster_name,db='../csv/monster_compendium.csv'):
+def search_monsters(monster_name,db=db_use):
 	'''
 	Search the database of monsters (used in the regression) and return a list of monsters
 	for which the entered search terms exists in a given name in the compendium. 
@@ -23,14 +25,30 @@ def search_monsters(monster_name,db='../csv/monster_compendium.csv'):
 	print('----------------------------------------------')
 
 
-def search_by_stat(stat,lower,upper):
+def search_by_stat(db=db_use,**kwargs):
 	'''
 	Find all monsters in the compendium with stats in a certain boundary. 
+	Input format is a list of any number of KWARGS with format 
+	statname=(low,high) OR statname=bool
+	for cases where the column is a "one hot"
+	A standard search might be
+		search_by_stat(CR=(2,3),AC=(12,14),HP=(50,80))
+	or 
+		search_by_stat(CR=(2,5),spellcasting=True)
 	'''
-	pass
+	df = pd.read_csv(db,header=0)
+	query_string = ''
+	for i in kwargs.keys():
+		if type(kwargs[i]) == bool:
+			query_string += '{} == 1.0'.format(i)
+		else:
+			query_string +='{0} > {1} & {0} < {2}'.format(i,kwargs[i][0],kwargs[i][1])
+		query_string +=' & '
+	query_string = query_string[:-3]
+	return df.query(query_string)
 
 
-def load_monster(monster_name,fullsearch=False,db='../csv/monster_compendium.csv'):
+def load_monster(monster_name,fullsearch=False,db=db_use):
 	'''
 	Given a monster name that is in the compendium, create a StatBlock object with that monster's stats. 
 	Has an optional fullsearch flag which reproduces the usage of 'search_monsters()'. 
@@ -91,10 +109,10 @@ class StatBlock(object):
 	The primary user object in monsterCR -- the StatBlock contains all relevant statistics on a creature
 	along with methods for calculating (or recalculating) desired statistics
 	'''
-	def __init__(self,name):
+	def __init__(self,name,db=db_use):
 		#Store relevant properties as attributes of class
 		#Load final dataframe of parameters which will then be initialized for each statblock  
-		stat_names = pd.read_csv('../csv/New_great_compendium_v1.csv',header=0,nrows=1).columns
+		stat_names = pd.read_csv(db,header=0,nrows=1).columns
 		self.stats = pd.DataFrame()
 		for i in stat_names:
 			setattr(self,i,0.0)
@@ -107,8 +125,8 @@ class StatBlock(object):
 		# (and for convenient single variable information transfer)
 		
 
-	def update_from_monster(self,df):
-		stat_names = pd.read_csv('../csv/monster_compendium.csv',header=0,nrows=1).columns
+	def update_from_monster(self,df,db=db_use):
+		stat_names = pd.read_csv(db,header=0,nrows=1).columns
 		for i in stat_names:
 			setattr(self,i,df[i].values[0])
 			self.stats[i] = np.array(df[i])
@@ -164,7 +182,7 @@ class Model(object):
 	Object responsible for executing the regression and/or loading regression weights and 
 	which contains methods for calculating stats given other stats. (namely CR given everything else)
 	'''
-	def __init__(self,design_csv='../csv/monster_compendium.csv'):
+	def __init__(self,design_csv=db_use):
 		self.design_df_raw = pd.read_csv(design_csv,header=0)
 
 	
