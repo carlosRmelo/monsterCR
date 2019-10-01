@@ -113,7 +113,9 @@ class StatBlock(object):
 		#Store relevant properties as attributes of class
 		#Load final dataframe of parameters which will then be initialized for each statblock  
 		stat_names = pd.read_csv(db,header=0,nrows=1).columns
+		self.all_monsters = pd.read_csv(db,header=0)
 		self.stats = pd.DataFrame()
+
 		for i in stat_names:
 			setattr(self,i,0.0)
 			self.stats[i] = np.array([0.0])
@@ -175,7 +177,56 @@ class StatBlock(object):
 		self.update_stat('INT',value)
 	def update_HP(self,value):
 		self.update_stat('HP',value)
+	
+	def radar_plot(self,cols_show=['HP','AC','STR','DEX','CON','avg_attack_1'],normalize=True,just_in_CR=False):
+		'''
+		Diagnostic plot which shows a 'radar plot' of desired statistics for your monster.
+			INPUTS: 
+					cols_show (arr_like): list of strings containing stats to show in plot
+					normalize (bool): whether to normalize stats comparing to other monsters (default: True)
+					just_in_CR (bool): whether to normalize just to creatures at your monsters CR, or to 
+									   all creatures in the list. Only used if normalize is True. (default: False)
+		    RETURNS: 
+		    	fig: A figure showing the radar plot of your creature. If normalize is True, a black circle
+		    	     is plotted at 1.0 to demarcate the average. 
+		'''
 
+		labels=np.array(cols_show)
+		stats=self.stats.loc[0,labels].values
+		if normalize:
+			if just_in_CR:
+				stats_norm = stats / self.all_monsters.loc[self.all_monsters['CR']==self.CR,labels].mean(axis=0)
+			else:
+				stats_norm = stats / self.all_monsters[labels].mean(axis=0)
+		angles=np.linspace(0, 2*np.pi, len(labels), endpoint=False)
+		# close the plot
+		stats=np.concatenate((stats,[stats[0]]))
+		stats_norm = np.concatenate((stats_norm,[stats_norm[0]]))
+		angles=np.concatenate((angles,[angles[0]]))
+		fig=plt.figure(figsize=(6,6))
+		ax = fig.add_subplot(111, polar=True)
+		if normalize:
+			ax.plot(angles, stats_norm, 'o-', linewidth=2)
+			ax.fill(angles, stats_norm, alpha=0.25)
+			ax.set_thetagrids(angles * 180/np.pi, labels)
+		else:
+			ax.plot(angles, stats, 'o-', linewidth=2)
+			ax.fill(angles, stats, alpha=0.25)
+			ax.set_thetagrids(angles * 180/np.pi, labels)
+
+		title = self.Name + " | CR {}".format(self.CR)
+		ax.set_title(title)
+		#ax.set_rticks([0.25,0.5,0.75,1, 1.5, 2]) 
+		ax.set_rlabel_position(-25.5)
+		rlabels = ax.get_ymajorticklabels()
+		for label in rlabels:
+			label.set_color('r')
+		if normalize:
+			rs = np.ones(1000)
+			theta = np.linspace(0,2 * np.pi,1000)
+			ax.plot(theta, rs,'k',lw=2)
+		ax.grid(True)
+		return fig
 
 class Model(object):
 	'''
