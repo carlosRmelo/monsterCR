@@ -2,8 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import pandas as pd 
 import functools
+from sklearn.linear_model import LinearRegression, RidgeCV, Lasso
 
-db_use = '../csv/monster_compendium.csv'
+
+db_use = '../csv/New_great_compendium_v1.csv'
 
 def search_monsters(monster_name,db=db_use):
 	'''
@@ -262,45 +264,62 @@ class Model(object):
 
 		return design_df 
 
-	def fit(self,stat_fit='CR',log_lam=8.5,plot_fit=False):
+	def fit(self,stat_fit='CR',regression_type='sklearn_linear',log_lam=8.5,plot_fit=False):
 
 		#Specify the DESIGN MATRIX of regress
 		drop_cols = ['Name'] + [stat_fit]
-
-		self.design_df = self.statblock_to_structure(self.design_df_raw,drop_cols)
-
-		self.y = np.array(self.design_df_raw[stat_fit]) / self.design_df_raw[stat_fit].mean()
-		self.A = np.hstack( (np.array(self.design_df[i]).reshape(-1,1) for i in self.design_df.columns ) ) 
-		self.A = np.nan_to_num(self.A)
-		self.C = self.A.T.dot(self.A)
-		self.C[np.diag_indices_from(self.C)] += 1.0 / 10 ** log_lam
-		self.w = np.linalg.solve(self.C, self.A.T.dot(self.y))
-		self.pred_stat = np.dot(self.A,self.w) 
-		ndof = self.A.shape[1]
-		chi_squared = (self.y-self.pred_stat)**2 / ndof
-		print('Chi-squared of fit: {}'.format(np.sum(chi_squared)))
-		self.model_weights = self.w 
+		if regression_type == 'matrix':
+			self.design_df = self.statblock_to_structure(self.design_df_raw,drop_cols)
+		elif regression_type == 'sklearn_linear':
+			self.design_df = self.design_df_raw.drop(['Name',stat_fit],axis=1)
+		self.y = np.array(self.design_df_raw[stat_fit]) #/ self.design_df_raw[stat_fit].mean()
+		if regression_type=='matrix':
+			self.A = np.hstack( (np.array(self.design_df[i]).reshape(-1,1) for i in self.design_df.columns ) ) 
+			self.A = np.nan_to_num(self.A)
+			self.C = self.A.T.dot(self.A)
+			self.C[np.diag_indices_from(self.C)] += 1.0 / 10 ** log_lam
+			self.w = np.linalg.solve(self.C, self.A.T.dot(self.y))
+			self.pred_stats = np.dot(self.A,self.w) 
+			ndof = self.A.shape[1]
+			chi_squared = (self.y-self.pred_stat)**2 / ndof
+			print('Chi-squared of fit: {}'.format(np.sum(chi_squared)))
+			self.model_weights = self.w 
+		
+		elif regression_type=='sklearn_linear':
+			self.model = RidgeCV(alphas=np.logspace(-10,4, 6),normalize=True)
+			#self.model = LinearRegression()
+			self.model.fit(self.design_df,self.y)
+			self._isfit = True
+			self.pred_stats = np.rint(self.model.predict(self.design_df))
+			print(self.model.score(self.design_df,self.y))
 		if plot_fit:
 			fig, ax = plt.subplots()
-			ax.plot(self.pred_stat*self.design_df_raw[stat_fit].mean(),self.y*self.design_df_raw[stat_fit].mean(),'.',color='C0',alpha=0.9)
+			ax.plot(self.pred_stats,self.y,'.',color='C0',alpha=0.9)
 			ax.set_ylabel('{} values from the literature'.format(stat_fit))
 			ax.set_xlabel('{} values from monsterCR predictions'.format(stat_fit))
-			ax.plot([0,40],[0,40],'k',alpha=0.5,label='1:1 relation')
+			ax.plot([0,33],[0,33],'k',alpha=0.5,label='1:1 relation')
 			ax.legend()
 			plt.show()
 
 		
-	def predict(self,stat_df,stat):
+	def predict(self,stat_df,stat,mode='sklearn'):
 		'''
 		Given a single row-vector stat_df dataframe of a monster, use 
 		the calculated model weights to generate a predicted CR 
 		'''
 		drop_cols=['Name'] + [stat]
-		stat_df = self.statblock_to_structure(stat_df,drop_cols)
-		A = np.hstack( (np.array(stat_df[i]).reshape(-1,1) for i in stat_df.columns )  ) 
-		if not hasattr(self,'model_weights'):
+		
+		if not hasattr(self,'_isfit'):
 			self.fit()
-		fit_stat = np.dot(A,self.model_weights)*self.design_df_raw[stat].mean()
+		if mode=='matrix':
+			stat_df = self.statblock_to_structure(stat_df,drop_cols)
+			A = np.hstack( (np.array(stat_df[i]).reshape(-1,1) for i in stat_df.columns )  ) 
+			fit_stat = np.dot(A,self.model_weights)*self.design_df_raw[stat].mean()
+		elif mode =='sklearn':
+			A = stat_df.drop(['Name',stat],axis=1)
+			fit_stat = self.model.predict(A)
+			if fit_stat < 0.0:
+				fit_stat = 0.0
 		print('Predicted {}: {}'.format(stat,fit_stat))
 		
 
