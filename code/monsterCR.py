@@ -229,6 +229,71 @@ class StatBlock(object):
 			ax.plot(theta, rs,'k',lw=2)
 		ax.grid(True)
 		return fig
+	
+	def input_damage_roll(self,damage_string,default=1):
+		'''
+		Given a typical string version of a dnd damage roll (e.g., 10d5+4),
+		calculate the average damage of that roll and the max, and update the relevant stats. 
+		If one is provided alone or in a list, it goes into attack_1, unless specified 
+		If two strings are provided in a list ['1d5+4','2d6-1'], by default it will fill attack_1 and attack_2 stats. 
+		If more than 2 are entered, by default, all stats following the first are lumped into attack_2. (we only track 2 attacks)
+		'''
+		pass
+
+	def split_damage_rolls(self,damage_string):
+		'''
+		Given a damage_string, determine if more than one are present and if so, split them. 
+		e.g., input --> 1d4 returns 1d4, but input --> 1d4+2d6 returns ['1d4',2d6']. 
+		Function also catches modifiers, e.g., input--> 6d12+5+1d6-2 returns ['6d12+5','1d6-2']
+		'''
+		d_locs = [m.start() for m in re.finditer('d', damage_string)]
+		d2 = d_locs[-1]
+		plus_locs= [m.start() for m in re.finditer('\+', damage_string)]
+		diffs = d2 - np.array(plus_locs)
+		corr_ind = d2 - np.min([n for n in diffs  if n>0])
+		return [damage_string[:corr_ind],damage_string[corr_ind+1:]]
+    
+	def calc_max_damage(self,damage_string):
+		'''
+		Given a string in the d&d format 1d8+5 (etc.) or supplemental format 1d8+4+1d6+2,
+		return the maximum damage for that roll.
+		'''
+		if damage_string == 'nan' or damage_string=='VARIES':
+			 return 0.0
+		else:
+			mult = damage_string.replace('d','*')
+			max_dmg = eval(mult)
+			return max_dmg
+	    
+	    
+	def calc_avg_damage(self,damage_string,combine=True):
+		'''
+		Given a string in the d&d format 1d8+5 (etc.) or supplemental format 1d8+4+1d6+2,
+		return the average damage for that roll.
+		'''
+		if damage_string == 'nan' or damage_string=='VARIES' or damage_string == 'NaN':
+			return 0.0
+		else:
+			num_roll = damage_string.count('d')
+			if num_roll > 1:
+				rolls = split_damage_rolls(damage_string)
+			else:
+				rolls = [damage_string]
+
+			avg_damages = []
+			for dmg_str in rolls:
+				pos_d = dmg_str.find('d')
+				if pos_d == -1:
+					return 0.0
+				num_dice = int(dmg_str[:pos_d])
+				mult = dmg_str.replace('d','*0.5*')
+				avg_dmg = eval(mult) 
+				avg_damages.append(avg_dmg + 0.5*num_dice)
+
+			if combine:
+				return np.sum(avg_damages)
+			elif combine==False:
+				return avg_damages
 
 class Model(object):
 	'''
