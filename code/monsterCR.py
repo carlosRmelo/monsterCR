@@ -238,7 +238,42 @@ class StatBlock(object):
 		If two strings are provided in a list ['1d5+4','2d6-1'], by default it will fill attack_1 and attack_2 stats. 
 		If more than 2 are entered, by default, all stats following the first are lumped into attack_2. (we only track 2 attacks)
 		'''
-		pass
+		#Check input 
+		if type(damage_string) == 'str':
+			damage_string = self.split_damage_rolls(damage_string)
+		
+
+		if len(damage_string) == 1:
+			avg_attack = self.calc_avg_damage(damage_string[0])
+			max_attack = self.calc_max_damage(damage_string[0])
+			self.update_stat('avg_attack_1',avg_attack)
+			self.update_stat('max_attack_1',max_attack)
+			self.update_stat('avg_attack_dmg',avg_attack)
+			self.update_stat('max_attack_dmg',max_attack)
+		elif len(damage_string) == 2:
+			avg_attack_1 = self.calc_avg_damage(damage_string[0])
+			avg_attack_2 = self.calc_avg_damage(damage_string[1])
+			max_attack_1 = self.calc_max_damage(damage_string[0])
+			max_attack_2 = self.calc_max_damage(damage_string[1])
+			self.update_stat('avg_attack_1',avg_attack_1)
+			self.update_stat('max_attack_1',max_attack_1)
+			self.update_stat('avg_attack_2',avg_attack_2)
+			self.update_stat('max_attack_2',max_attack_2)
+			self.update_stat('avg_attack_dmg',np.sum([avg_attack_1,avg_attack_2]))
+			self.update_stat('max_attack_dmg',np.sum([max_attack_1,max_attack_2]))
+		elif len(damage_string)>2:
+			avg_attack_1 = self.calc_avg_damage(damage_string[0])
+			max_attack_1 = self.calc_max_damage(damage_string[0])
+			self.update_stat('avg_attack_1',avg_attack_1)
+			self.update_stat('max_attack_1',max_attack_1)
+			other_avg_attacks = np.sum([self.calc_avg_damage(i) for i in damage_string[1:]]) 
+			other_max_attacks = np.sum([self.calc_max_damage(i) for i in damage_string[1:]])
+			self.update_stat('avg_attack_2',other_avg_attacks)
+			self.update_stat('max_attack_2',other_max_attacks)
+			self.update_stat('avg_attack_dmg',np,sum([other_avg_attacks,avg_attack_1]))
+			self.update_stat('max_attack_dmg',np,sum([other_max_attacks,max_attack_1]))
+	    	
+
 
 	def split_damage_rolls(self,damage_string):
 		'''
